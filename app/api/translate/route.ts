@@ -18,7 +18,9 @@ export async function POST(req: Request) {
 法则：
 1. 意象替换：将现代词汇隐喻化。如北京->燕京/京师，汽车->神驹/铁骑，摇号->金榜抽选/抽牌定签，程序/代码->机巧，加班->宵旰。
 2. 禁令：绝对禁止拼音、英文、括号、注释。只输出翻译结果。
-3. 完整性：必须完整翻译所有情节，不可中途截断，必须收尾。`;
+3. 完整性：必须完整翻译所有情节，不可中途截断，必须收尾。
+4. 强力收尾：无论翻译到何处，最终必须以句号或叹号结尾。若感词穷，亦须以大白话完成余下情节，严禁中途断句。
+5. 结构暗示：请确保译文长度与原文信息量对等，不要过度精简导致逻辑缺失。`;
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
@@ -29,13 +31,15 @@ export async function POST(req: Request) {
         contents: [{ 
           parts: [{ 
             // 优化输入结构，给原句清晰边界
-            text: `${systemPrompt}\n\n待翻译原文：'${text}'\n雅言译文：` 
+            text: `${systemPrompt}\n\n--- 待翻译原文 ---\n${text}\n\n--- 完整雅言译文 ---\n`
           }] 
         }],
         generationConfig: {
-          temperature: 0.6, // 略微降低随机性，让先生更稳重
-          maxOutputTokens: 1000, // 增加 Token 长度限制，防止“抽选之”这种截断发生
-          topP: 0.9,
+          temperature: 0.85, // 略微降低随机性，让先生更稳重
+          maxOutputTokens: 1500, // 增加 Token 长度限制，防止“抽选之”这种截断发生
+          topP: 0.95,
+          topK: 40,             // 限制一下候选词范围，防止在“雅词”里挑花了眼导致超时
+          presencePenalty: 0.1, // 稍微鼓励它说出更多不同的内容
         }
       })
     });
