@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 2. 禁令：绝对禁止拼音、英文、括号、注释。只输出翻译结果。
 3. 完整性：必须完整翻译所有情节，不可中途截断，必须收尾。`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
