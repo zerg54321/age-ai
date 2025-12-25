@@ -5,27 +5,22 @@ export async function POST(req: Request) {
     const { text, style } = await req.json();
     const apiKey = process.env.GEMINI_API_KEY;
 
-    const systemPrompt = `你是一位精通中国古典文学、修辞严谨的大师。
-请将用户的白话文翻译成古文，严禁输出任何拼音、注释或英文。
-
+    // 1. 采用探针实验成功的“灵魂咒语”
+    const systemPrompt = `你是一位精通中国古典文学大师。将白话文翻译为纯正古文。
 当前风格：${style}。
 
-针对风格的灵魂要求：
-- 【jianghu】：狂傲洒脱。多用“余”、“且”、“快哉”。
-- 【miaotang】：方正典雅。多用对仗，词藻华丽。
-- 【guige】：清丽含蓄。多用“侬”、“思量”、“锦书”。
-- 【shijing】：朴实生动。多用“俺”、“汉子”、“生计”。
+各风格强制要求：
+- 【jianghu (江湖)】：洒脱、豪放。多用“余”、“且”、“快哉”、“纵马”、“痛快”。
+- 【miaotang (庙堂)】：严谨、对仗、华丽。像公文奏章。多用“臣”、“克捷”、“载”、“昭示”。
+- 【guige (闺阁)】：婉约、细腻。多用“侬”、“思量”、“锦书”、“凭栏”。
+- 【shijing (市井)】：接地气、通俗古文。多用“俺”、“汉子”、“讨生活”、“这事”、“欢喜”。
 
-准则：
-1. **全意传达**：必须完整翻译所有情节（包括：北京、车牌摇号、开车、驰骋）。
-2. **万物雅化**：
-   - 地名：北京->燕京/京师。
-   - 现代事物：车牌摇号->金榜抽选/官给行牌，开车->驾铁骑/控神驹，汽车->神驹/铁甲车。
-3. **绝对禁止**：严禁输出拼音（如 Zhōngguó）、严禁输出括号、严禁输出任何解释性文字。
-4. **输出内容**：只允许输出翻译后的古文纯文本。`;
+法则：
+1. 意象替换：将现代词汇隐喻化。如北京->燕京/京师，汽车->神驹/铁骑，摇号->金榜抽选/抽牌定签，程序/代码->机巧，加班->宵旰。
+2. 禁令：绝对禁止拼音、英文、括号、注释。只输出翻译结果。
+3. 完整性：必须完整翻译所有情节，不可中途截断，必须收尾。`;
 
-    // 适配 Gemini 3 Flash 的 API 格式
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -33,24 +28,26 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         contents: [{ 
           parts: [{ 
-            text: `${systemPrompt}\n\n待翻译文字：'${text}'` 
+            // 优化输入结构，给原句清晰边界
+            text: `${systemPrompt}\n\n待翻译原文：'${text}'\n雅言译文：` 
           }] 
         }],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 500,
+          temperature: 0.6, // 略微降低随机性，让先生更稳重
+          maxOutputTokens: 1000, // 增加 Token 长度限制，防止“抽选之”这种截断发生
+          topP: 0.9,
         }
       })
     });
 
     const data = await response.json();
     
-    // 检查 Gemini 的返回结构
     if (data.error) {
       throw new Error(data.error.message);
     }
 
-    const result = data.candidates[0].content.parts[0].text.trim();
+    // 检查路径并清洗可能存在的引号
+    const result = data.candidates[0].content.parts[0].text.trim().replace(/^["']|["']$/g, '');
 
     return NextResponse.json({ result });
 
