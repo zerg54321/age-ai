@@ -5,11 +5,15 @@ export async function POST(req: Request) {
     const { text, style } = await req.json();
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // 针对 Gemini 优化的 Prompt
     const systemPrompt = `你是一位精通中国古典文学的大师。
-    请将用户的白话文翻译成古文。
-    风格要求：${style}（miaotang: 庄重典雅, jianghu: 豪放不羁, guige: 婉约细腻, shijing: 朴实生动）。
-    要求：只返回翻译结果，不要任何多余的解释或引号。`;
+请将用户的白话文翻译成古文。
+风格要求：${style}。
+
+翻译准则：
+1. 必须包含原句的所有核心信息点（比如：炸鸡、可乐、剩下、晚饭、项目成功、坎坷、开心）。
+2. 即使是白话文中的现代事物，也要根据风格进行雅化（例如：炸鸡可译为“炙禽”，可乐可译为“玄冰醴”或“焦糖醴”，项目成功可译为“大功告成”）。
+3. 保持意境连贯，不要只翻译前半句。
+4. 只返回翻译后的古文，严禁任何解释。`;
 
     // 适配 Gemini 3 Flash 的 API 格式
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
@@ -25,7 +29,7 @@ export async function POST(req: Request) {
         }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 200,
+          maxOutputTokens: 500,
         }
       })
     });
