@@ -1,62 +1,75 @@
 import { NextResponse } from "next/server";
+import OpenAI from "openai";
+
+// 1. 初始化通义千问客户端
+const qwen = new OpenAI({
+  apiKey: process.env.DASHSCOPE_API_KEY, // 请确保在 .env.local 中配置了此变量
+  baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+});
+
+const SYSTEM_PROMPT = `你是一位精通时空感应的博学导师。当用户输入一段现代白话文，你的任务是通过语义波动，打捞出这个灵魂在古代（秦汉、魏晋、唐宋、明清）曾亲手写下的原稿。
+
+### 角色设定：
+1. **前世之我**：他是译文的写作者。其文笔必须符合对应朝代的风骨。
+2. **后世读者（你）**：你是这一墨宝的发现者与点评人。
+
+### 输出协议（必须输出严格的 JSON 格式）：
+{
+  "translation": "此处为打捞出的古文原稿。文字要极具张力，根据意境自动匹配体裁。",
+  "commentary": "此处为你的朱砂批注。以仰望者的姿态，分析阁下（用户）此笔的妙处（如炼字、意向、化用典故），并以‘阁下’称呼用户。字数约 50-100 字。",
+  "dynasty": "随机生成一个具有真实感的朝代年号（如：贞观年间、元丰三年、万历末年）。",
+  "genre": "本次创作采用的文体名称（如：七言绝句、四言诗、骈体文）。"
+}
+
+### 创作准则：
+- 严禁出现“翻译”二字，要称之为“墨宝”或“手笔”。
+- 无论原话多简短，打捞出的内容必须意蕴深厚，不得断句。
+- 点评要真诚且高级，不仅要赞美，还要说出美在何处。`;
 
 export async function POST(req: Request) {
   try {
-    const { text, style } = await req.json();
-    const apiKey = process.env.GEMINI_API_KEY;
+    const { text, genre: userSelectedGenre } = await req.json();
 
-    // 1. 采用探针实验成功的“灵魂咒语”
-    const systemPrompt = `你是一位精通中国古典文学大师。将白话文翻译为纯正古文。
-当前风格：${style}。
-
-各风格强制要求：
-- 【jianghu (江湖)】：洒脱、豪放。多用“余”、“且”、“快哉”、“纵马”、“痛快”。
-- 【miaotang (庙堂)】：严谨、对仗、华丽。像公文奏章。多用“臣”、“克捷”、“载”、“昭示”。
-- 【guige (闺阁)】：婉约、细腻。多用“侬”、“思量”、“锦书”、“凭栏”。
-- 【shijing (市井)】：接地气、通俗古文。多用“俺”、“汉子”、“讨生活”、“这事”、“欢喜”。
-
-法则：
-1. 意象替换：将现代词汇隐喻化。如北京->燕京/京师，汽车->神驹/铁骑，摇号->金榜抽选/抽牌定签，程序/代码->机巧，加班->宵旰。
-2. 禁令：绝对禁止拼音、英文、括号、注释。只输出翻译结果。
-3. 完整性：必须完整翻译所有情节，不可中途截断，必须收尾。
-4. 强力收尾：无论翻译到何处，最终必须以句号或叹号结尾。若感词穷，亦须以大白话完成余下情节，严禁中途断句。
-5. 结构暗示：请确保译文长度与原文信息量对等，不要过度精简导致逻辑缺失。`;
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ 
-          parts: [{ 
-            // 优化输入结构，给原句清晰边界
-            text: `${systemPrompt}\n\n--- 待翻译原文 ---\n${text}\n\n--- 完整雅言译文 ---\n`
-          }] 
-        }],
-        generationConfig: {
-          temperature: 0.85, // 略微降低随机性，让先生更稳重
-          maxOutputTokens: 1500, // 增加 Token 长度限制，防止“抽选之”这种截断发生
-          topP: 0.95,
-          topK: 40,             // 限制一下候选词范围，防止在“雅词”里挑花了眼导致超时
-          presencePenalty: 0.1, // 稍微鼓励它说出更多不同的内容
-        }
-      })
-    });
-
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error.message);
+    if (!text) {
+      return NextResponse.json({ error: "内容为空，无法感应" }, { status: 400 });
     }
 
-    // 检查路径并清洗可能存在的引号
-    const result = data.candidates[0].content.parts[0].text.trim().replace(/^["']|["']$/g, '');
+    // 2. 组装最终提示词（处理用户手动选定的体裁）
+    let finalPrompt = SYSTEM_PROMPT;
+    if (userSelectedGenre && userSelectedGenre !== 'auto') {
+      finalPrompt += `\n\n【特别命题：请务必以“${userSelectedGenre}”的体裁进行创作】`;
+    }
 
-    return NextResponse.json({ result });
+    // 3. 调用通义千问 (使用 qwen-plus 或 qwen-max)
+    const completion = await qwen.chat.completions.create({
+      model: "qwen-plus", 
+      messages: [
+        { role: "system", content: finalPrompt },
+        { role: "user", content: `【需打捞的心境】：${text}` }
+      ],
+      // 关键：强制 JSON 输出
+      response_format: { type: "json_object" },
+      temperature: 0.85,
+      max_tokens: 1500,
+    });
+
+    const resultText = completion.choices[0].message.content;
+
+    if (!resultText) {
+      throw new Error("模型未返回内容");
+    }
+
+    // 4. 解析结果并返回给前端
+    const parsedData = JSON.parse(resultText);
+    
+    // 返回包含翻译、批注、朝代、体裁的完整对象
+    return NextResponse.json(parsedData);
 
   } catch (error: any) {
-    console.error("Gemini 接口报错:", error);
-    return NextResponse.json({ error: "先生此时正在闭关（API 故障），请稍后再试。" }, { status: 500 });
+    console.error("Qwen API Error:", error);
+    return NextResponse.json(
+      { error: "时空连接失败，请稍后再试", details: error.message },
+      { status: 500 }
+    );
   }
 }
