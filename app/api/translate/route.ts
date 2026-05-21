@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
     // 3. 调用通义千问 (使用 qwen-plus 或 qwen-max)
     const completion = await qwen.chat.completions.create({
-      model: "qwen-plus", 
+      model: "qwen3.7-max", 
       messages: [
         { role: "system", content: finalPrompt },
         { role: "user", content: `【需打捞的心境】：${text}` }
